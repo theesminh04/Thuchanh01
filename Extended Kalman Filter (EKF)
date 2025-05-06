@@ -1,0 +1,60 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+# data
+df = pd.read_csv("train.csv")
+df_friday = df[df['Publication_Day'] == 'Friday']
+
+# mo phong thoi gian cac nhom 
+group_size = 10
+n_groups = len(df_friday) // group_size
+friday_counts = np.array([len(df_friday.iloc[i*group_size:(i+1)*group_size]) for i in range(n_groups)])
+
+# dinh nghia ham ekf
+def f(x):          
+    return np.sqrt(np.abs(x))
+
+def h(x):          
+    return x**2
+
+def f_jacobian(x):  
+    return 0.5 / np.sqrt(np.abs(x)) if x != 0 else 1e-5
+
+def h_jacobian(x):  
+    return 2 * x
+
+# khoi tao
+n = len(friday_counts)
+x_est = np.zeros(n)
+P = np.zeros(n)
+Q = 1e-3  
+R = 5     
+x_est[0] = friday_counts[0]
+P[0] = 1.0
+
+# vong lap EKF
+for k in range(1, n):
+    # du doan
+    x_pred = f(x_est[k-1])
+    F = f_jacobian(x_est[k-1])
+    P_pred = F * P[k-1] * F + Q
+
+    # cap nhat
+    H = h_jacobian(x_pred)
+    K = P_pred * H / (H * P_pred * H + R)
+    z = friday_counts[k]
+    x_est[k] = x_pred + K * (z - h(x_pred))
+    P[k] = (1 - K * H) * P_pred
+
+# Plot
+plt.figure(figsize=(12, 5))
+plt.plot(friday_counts, label='Observed Friday Counts', marker='o')
+plt.plot(x_est, label='EKF Smoothed', linestyle='--', marker='x')
+plt.title('Extended Kalman Filter - Friday Podcast Counts')
+plt.xlabel('Pseudo Time (Grouped Fridays)')
+plt.ylabel('Podcast Count')
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()
